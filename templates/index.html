@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Action Recognizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f0f;
+    --surface: #181818;
+    --surface2: #212121;
+    --border: #2a2a2a;
+    --border2: #353535;
+    --text: #e8e6e0;
+    --muted: #888580;
+    --pick: #1D9E75;
+    --pick-dim: rgba(29,158,117,0.12);
+    --drop: #D85A30;
+    --drop-dim: rgba(216,90,48,0.12);
+    --accent: #5DCAA5;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-weight: 300;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 24px 80px;
+  }
+
+  header {
+    width: 100%;
+    max-width: 680px;
+    margin-bottom: 48px;
+  }
+
+  .logo {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  .logo span { color: var(--accent); }
+
+  h1 {
+    font-size: 36px;
+    font-weight: 300;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+
+  h1 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+
+  .subtitle {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    margin-top: 16px;
+  }
+
+  .status-pill .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+
+  .status-pill.loaded .dot { background: var(--pick); }
+  .status-pill.loaded { color: var(--accent); border-color: rgba(93,202,165,0.3); }
+  .status-pill.demo .dot { background: #EF9F27; }
+  .status-pill.demo { color: #EF9F27; border-color: rgba(239,159,39,0.3); }
+
+  main {
+    width: 100%;
+    max-width: 680px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .drop-zone {
+    border: 1px dashed var(--border2);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 56px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(93,202,165,0.04);
+  }
+
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon {
+    width: 48px; height: 48px;
+    margin: 0 auto 16px;
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .drop-icon svg { stroke: var(--muted); }
+
+  .drop-title {
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .drop-sub {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .drop-sub strong {
+    color: var(--accent);
+    font-weight: 400;
+  }
+
+  .preview-area {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .preview-area.visible { display: block; }
+
+  .preview-area video {
+    width: 100%;
+    display: block;
+    max-height: 320px;
+    object-fit: contain;
+    background: #000;
+  }
+
+  .preview-meta {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--border);
+  }
+
+  .preview-meta .filename {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 400px;
+  }
+
+  .btn-clear {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .btn-clear:hover { color: var(--text); border-color: var(--border2); }
+
+  .btn-run {
+    width: 100%;
+    padding: 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-run:hover:not(:disabled) {
+    background: rgba(93,202,165,0.08);
+    border-color: rgba(93,202,165,0.4);
+    color: var(--accent);
+  }
+
+  .btn-run:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn-run .spinner {
+    display: none;
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  .btn-run.loading .spinner { display: block; }
+  .btn-run.loading .btn-label { opacity: 0.5; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .result-card {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .result-card.visible { display: block; }
+
+  .result-header {
+    padding: 24px 24px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .result-badge {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    padding: 8px 20px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .result-badge.pick {
+    background: var(--pick-dim);
+    color: var(--pick);
+    border: 1px solid rgba(29,158,117,0.25);
+  }
+
+  .result-badge.drop {
+    background: var(--drop-dim);
+    color: var(--drop);
+    border: 1px solid rgba(216,90,48,0.25);
+  }
+
+  .result-conf {
+    flex: 1;
+  }
+
+  .result-conf .label {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+
+  .result-conf .value {
+    font-size: 28px;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+  }
+
+  .result-conf .value span {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .result-bars {
+    padding: 20px 24px;
+  }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .bar-row:last-child { margin-bottom: 0; }
+
+  .bar-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    width: 36px;
+    flex-shrink: 0;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .bar-fill.pick { background: var(--pick); }
+  .bar-fill.drop { background: var(--drop); }
+
+  .bar-pct {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    width: 40px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .result-meta {
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 24px;
+  }
+
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .meta-item .mk {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .meta-item .mv {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .demo-notice {
+    display: none;
+    padding: 10px 16px;
+    background: rgba(239,159,39,0.08);
+    border: 1px solid rgba(239,159,39,0.2);
+    border-radius: 8px;
+    font-size: 12px;
+    color: #EF9F27;
+    font-family: var(--font-mono);
+  }
+
+  .demo-notice.visible { display: block; }
+
+  .error-box {
+    display: none;
+    padding: 14px 16px;
+    background: rgba(216,90,48,0.08);
+    border: 1px solid rgba(216,90,48,0.2);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--drop);
+    font-family: var(--font-mono);
+  }
+
+  .error-box.visible { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">VideoMAE + LoRA &nbsp;/&nbsp; <span>few-shot action classifier</span></div>
+  <h1>Action <em>recognizer</em></h1>
+  <p class="subtitle">Upload a short video clip. The model predicts whether the action is a <strong>pick</strong> or a <strong>drop</strong>.</p>
+
+  {% if model_loaded %}
+  <div class="status-pill loaded">
+    <span class="dot"></span> model loaded &nbsp;·&nbsp; cuda
+  </div>
+  {% else %}
+  <div class="status-pill demo">
+    <span class="dot"></span> demo mode &nbsp;·&nbsp; no checkpoint found
+  </div>
+  {% endif %}
+</header>
+
+<main>
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept="video/*">
+    <div class="drop-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    </div>
+    <p class="drop-title">Drop a video here</p>
+    <p class="drop-sub">or <strong>click to browse</strong> &nbsp;·&nbsp; mp4, mov, avi, webm</p>
+  </div>
+
+  <div class="preview-area" id="previewArea">
+    <video id="videoPreview" controls></video>
+    <div class="preview-meta">
+      <span class="filename" id="fileName">video.mp4</span>
+      <button class="btn-clear" id="btnClear">✕ clear</button>
+    </div>
+  </div>
+
+  <button class="btn-run" id="btnRun" disabled>
+    <div class="spinner"></div>
+    <span class="btn-label">run prediction</span>
+  </button>
+
+  <div class="demo-notice" id="demoNotice">
+    ⚠ no model checkpoint found at checkpoints/action_model.pt — showing simulated output
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="result-card" id="resultCard">
+    <div class="result-header">
+      <div class="result-badge" id="resultBadge">pick</div>
+      <div class="result-conf">
+        <div class="label">confidence</div>
+        <div class="value" id="resultConf">—<span>%</span></div>
+      </div>
+    </div>
+    <div class="result-bars">
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--pick)">pick</span>
+        <div class="bar-track"><div class="bar-fill pick" id="barPick" style="width:0%"></div></div>
+        <span class="bar-pct" id="pctPick">0%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--drop)">drop</span>
+        <div class="bar-track"><div class="bar-fill drop" id="barDrop" style="width:0%"></div></div>
+        <span class="bar-pct" id="pctDrop">0%</span>
+      </div>
+    </div>
+    <div class="result-meta">
+      <div class="meta-item"><span class="mk">frames</span><span class="mv" id="metaFrames">—</span></div>
+      <div class="meta-item"><span class="mk">fps</span><span class="mv" id="metaFps">—</span></div>
+      <div class="meta-item"><span class="mk">duration</span><span class="mv" id="metaDur">—</span></div>
+      <div class="meta-item"><span class="mk">device</span><span class="mv" id="metaDev">—</span></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const previewArea = document.getElementById('previewArea');
+const videoPreview = document.getElementById('videoPreview');
+const fileName = document.getElementById('fileName');
+const btnClear = document.getElementById('btnClear');
+const btnRun = document.getElementById('btnRun');
+const resultCard = document.getElementById('resultCard');
+const demoNotice = document.getElementById('demoNotice');
+const errorBox = document.getElementById('errorBox');
+
+let currentFile = null;
+
+function setFile(file) {
+  if (!file || !file.type.startsWith('video/')) return;
+  currentFile = file;
+  const url = URL.createObjectURL(file);
+  videoPreview.src = url;
+  fileName.textContent = file.name;
+  previewArea.classList.add('visible');
+  dropZone.style.display = 'none';
+  btnRun.disabled = false;
+  resultCard.classList.remove('visible');
+  demoNotice.classList.remove('visible');
+  errorBox.classList.remove('visible');
+}
+
+function clearFile() {
+  currentFile = null;
+  videoPreview.src = '';
+  previewArea.classList.remove('visible');
+  dropZone.style.display = '';
+  btnRun.disabled = true;
+  resultCard.classList.remove('visible');
+  demoNotice.classList.remove('visible');
+  errorBox.classList.remove('visible');
+}
+
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) setFile(e.target.files[0]);
+});
+
+btnClear.addEventListener('click', clearFile);
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+
+btnRun.addEventListener('click', async () => {
+  if (!currentFile) return;
+
+  btnRun.disabled = true;
+  btnRun.classList.add('loading');
+  resultCard.classList.remove('visible');
+  errorBox.classList.remove('visible');
+  demoNotice.classList.remove('visible');
+
+  const formData = new FormData();
+  formData.append('video', currentFile);
+
+  try {
+    const res = await fetch('/predict', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (data.error) {
+      errorBox.textContent = 'Error: ' + data.error;
+      errorBox.classList.add('visible');
+      return;
+    }
+
+    const pred = data.prediction;
+    const conf = data.confidence;
+    const scores = data.scores;
+    const meta = data.meta;
+
+    document.getElementById('resultBadge').textContent = pred;
+    document.getElementById('resultBadge').className = 'result-badge ' + pred;
+    document.getElementById('resultConf').innerHTML = conf + '<span>%</span>';
+
+    const pickPct = scores.pick || 0;
+    const dropPct = scores.drop || 0;
+
+    setTimeout(() => {
+      document.getElementById('barPick').style.width = pickPct + '%';
+      document.getElementById('barDrop').style.width = dropPct + '%';
+    }, 50);
+
+    document.getElementById('pctPick').textContent = pickPct + '%';
+    document.getElementById('pctDrop').textContent = dropPct + '%';
+
+    document.getElementById('metaFrames').textContent = meta.total_frames;
+    document.getElementById('metaFps').textContent = meta.fps;
+    document.getElementById('metaDur').textContent = meta.duration + 's';
+    document.getElementById('metaDev').textContent = data.device;
+
+    resultCard.classList.add('visible');
+
+    if (data.demo) demoNotice.classList.add('visible');
+
+  } catch (err) {
+    errorBox.textContent = 'Request failed: ' + err.message;
+    errorBox.classList.add('visible');
+  } finally {
+    btnRun.disabled = false;
+    btnRun.classList.remove('loading');
+  }
+});
+</script>
+</body>
+</html>
